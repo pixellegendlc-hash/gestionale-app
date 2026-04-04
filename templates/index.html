@@ -685,7 +685,6 @@ async function loadDash() {
   try {
     const res = await fetch('/api/dashboard'); const d = await res.json();
     const ora = new Date().getHours();
-    const sal = ora<12?'Buongiorno':'ora<18?'Buon pomeriggio':'Buonasera';
     const greet = ora<12?'Buongiorno ☀️':ora<18?'Buon pomeriggio 🌤️':'Buonasera 🌙';
     document.getElementById('dash-greeting').textContent = greet;
     document.getElementById('dash-date').textContent = new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
