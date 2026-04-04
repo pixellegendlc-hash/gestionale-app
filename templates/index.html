@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gestionale">
+<meta name="theme-color" content="#0a0f1a">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<title>Gestionale</title>
+<style>
+:root {
+  --bg:      #0a0f1a;
+  --s1:      #111827;
+  --s2:      #1a2332;
+  --s3:      #243040;
+  --border:  #2d3f54;
+  --acc:     #6366f1;
+  --acc2:    #8b5cf6;
+  --cyan:    #06b6d4;
+  --green:   #10b981;
+  --yellow:  #f59e0b;
+  --red:     #ef4444;
+  --orange:  #f97316;
+  --text:    #f1f5f9;
+  --muted:   #64748b;
+  --muted2:  #94a3b8;
+  --nav:     64px;
+  --top:     56px;
+  --r:       16px;
+  --shadow:  0 4px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100dvh;overflow:hidden}
+
+/* ── TOPBAR ── */
+#topbar{position:fixed;top:0;left:0;right:0;height:var(--top);background:linear-gradient(135deg,#0f172a,#1e1b4b);border-bottom:1px solid #312e81;display:flex;align-items:center;padding:0 16px;gap:10px;z-index:100;backdrop-filter:blur(12px)}
+#topbar h1{font-size:19px;font-weight:800;flex:1;letter-spacing:-.5px}
+#topbar h1 span{background:linear-gradient(135deg,var(--acc),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.top-btn{background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:8px;border-radius:10px;transition:all .2s}
+.top-btn:hover{background:var(--s3);color:var(--text)}
+#notif-badge{position:absolute;top:10px;right:52px;background:var(--red);color:#fff;font-size:10px;font-weight:700;width:16px;height:16px;border-radius:50%;display:none;align-items:center;justify-content:center}
+
+/* ── BOTTOM NAV ── */
+#nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav);background:linear-gradient(0deg,#0f172a,#111827);border-top:1px solid var(--border);display:flex;z-index:100}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:none;color:var(--muted);font-size:10px;cursor:pointer;transition:all .2s;position:relative}
+.nb i{font-size:21px;transition:transform .2s}
+.nb.active{color:var(--acc)}
+.nb.active i{transform:translateY(-2px)}
+.nb .dot{position:absolute;top:8px;right:calc(50% - 16px);width:7px;height:7px;background:var(--red);border-radius:50%;display:none}
+
+/* ── PAGES ── */
+.page{position:fixed;top:var(--top);bottom:var(--nav);left:0;right:0;overflow-y:auto;overscroll-behavior:contain;display:none;padding:16px}
+.page.active{display:block}
+
+/* ── CARDS ── */
+.card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;transition:transform .15s,box-shadow .15s}
+.card:active{transform:scale(.99)}
+.card-sm{padding:12px}
+.card-title{font-weight:700;font-size:15px}
+.card-sub{font-size:12px;color:var(--muted);margin-top:3px}
+
+/* ── PRIORITY STYLES ── */
+.p-mA{border-left:3px solid var(--red);background:linear-gradient(135deg,#1f1315,var(--s2))}
+.p-A {border-left:3px solid var(--orange);background:linear-gradient(135deg,#1f1814,var(--s2))}
+.p-M {border-left:3px solid var(--yellow);background:linear-gradient(135deg,#1f1c10,var(--s2))}
+.p-B {border-left:3px solid var(--green);background:linear-gradient(135deg,#101f17,var(--s2))}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;letter-spacing:.3px}
+.b-red   {background:#ef444422;color:#ef4444}
+.b-orange{background:#f9731622;color:#f97316}
+.b-yellow{background:#f59e0b22;color:#f59e0b}
+.b-green {background:#10b98122;color:#10b981}
+.b-blue  {background:#6366f122;color:#6366f1}
+.b-cyan  {background:#06b6d422;color:#06b6d4}
+.b-gray  {background:#64748b22;color:#94a3b8}
+
+/* ── STAT GRID ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.stat-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:16px;text-align:center;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;opacity:.08}
+.stat-card.sc-blue::before{background:var(--acc)}
+.stat-card.sc-green::before{background:var(--green)}
+.stat-card.sc-red::before{background:var(--red)}
+.stat-card.sc-yellow::before{background:var(--yellow)}
+.stat-val{font-size:30px;font-weight:800}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ── SUMMARY BAR ── */
+.sumbar{display:flex;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px;gap:0}
+.si{flex:1;text-align:center}
+.si+.si{border-left:1px solid var(--border)}
+.si-val{font-size:17px;font-weight:700}
+.si-lbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ── FILTERS ── */
+.filters{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.fb{flex-shrink:0;border:1px solid var(--border);background:var(--s2);color:var(--muted2);border-radius:20px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.fb.active{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-color:transparent;box-shadow:0 2px 12px rgba(99,102,241,.4)}
+
+/* ── FAB ── */
+.fab{position:fixed;bottom:calc(var(--nav) + 16px);right:16px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 20px rgba(99,102,241,.5);z-index:90;display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s}
+.fab:active{transform:scale(.92);box-shadow:0 2px 10px rgba(99,102,241,.4)}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;color:var(--muted);padding:50px 20px}
+.empty i{font-size:52px;margin-bottom:16px;opacity:.25;display:block}
+.empty p{font-size:15px;margin-bottom:6px}
+.empty small{font-size:13px;opacity:.6}
+
+/* ── MODAL ── */
+.mbg{position:fixed;inset:0;background:#000b;display:none;z-index:200;align-items:flex-end;backdrop-filter:blur(4px)}
+.mbg.open{display:flex}
+.modal{background:var(--s1);border-radius:24px 24px 0 0;width:100%;max-height:92dvh;overflow-y:auto;padding:0 20px 30px}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 20px}
+.modal-title{font-size:18px;font-weight:800;margin-bottom:20px}
+.fg{margin-bottom:16px}
+.fg label{display:block;font-size:12px;color:var(--muted2);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.fi{width:100%;padding:13px 15px;background:var(--s2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;outline:none;transition:border-color .2s;font-family:inherit}
+.fi:focus{border-color:var(--acc)}
+.fi::placeholder{color:var(--muted)}
+textarea.fi{min-height:110px;resize:vertical}
+select.fi option{background:var(--s2)}
+.ma{display:flex;gap:10px;margin-top:8px;padding-top:4px}
+.btn{flex:1;padding:14px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.3px}
+.btn:active{transform:scale(.97)}
+.bp{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 2px 12px rgba(99,102,241,.35)}
+.bd{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff}
+.bg-{background:var(--s2);color:var(--text);border:1.5px solid var(--border)}
+.btn-icon{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+
+/* ── TASK ACTIONS ── */
+.ta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.ab{flex:1;min-width:80px;padding:9px 6px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .15s}
+.ab:active{transform:scale(.95)}
+.a-ok {background:#10b98122;color:#10b981;border:1px solid #10b98133}
+.a-ko {background:#ef444422;color:#ef4444;border:1px solid #ef444433}
+.a-ed {background:#6366f122;color:#6366f1;border:1px solid #6366f133}
+.a-del{background:#ef444422;color:#ef4444;border:1px solid #ef444433}
+.a-rs {background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b33}
+
+/* ── SUB TABS ── */
+.stabs{display:flex;background:var(--s2);border-radius:12px;padding:4px;margin-bottom:14px;border:1px solid var(--border)}
+.stab{flex:1;text-align:center;padding:9px 4px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);transition:all .2s}
+.stab.active{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+
+/* ── SEARCH ── */
+#sbar{display:none;padding:8px 16px 10px;background:var(--s1);border-bottom:1px solid var(--border)}
+#sbar.open{display:block}
+#sinput{width:100%;padding:11px 15px;background:var(--s2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;outline:none}
+#sinput:focus{border-color:var(--acc)}
+
+/* ── FOTO ── */
+.foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.foto-item{aspect-ratio:1;border-radius:10px;overflow:hidden;position:relative;cursor:pointer;background:var(--s3)}
+.foto-item img{width:100%;height:100%;object-fit:cover;transition:transform .2s}
+.foto-item:active img{transform:scale(.95)}
+.foto-del{position:absolute;top:4px;right:4px;background:#000a;border:none;color:#fff;width:24px;height:24px;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:calc(var(--nav) + 76px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--s3);color:var(--text);padding:10px 20px;border-radius:20px;font-size:14px;font-weight:600;z-index:500;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;border:1px solid var(--border);box-shadow:var(--shadow)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.t-ok {border-color:var(--green);color:var(--green)}
+#toast.t-err{border-color:var(--red);color:var(--red)}
+
+/* ── LOADER ── */
+.loader{display:flex;justify-content:center;padding:40px}
+.spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── PROGRESS BAR ── */
+.pbar{height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:8px}
+.pfill{height:100%;border-radius:3px;transition:width .5s}
+
+/* ── DASHBOARD SPECIFIC ── */
+.dash-hero{background:linear-gradient(135deg,#1e1b4b,#312e81,#1e1b4b);border-radius:var(--r);padding:20px;margin-bottom:14px;border:1px solid #4338ca44}
+.dash-hero h2{font-size:22px;font-weight:800;margin-bottom:4px}
+.dash-hero p{color:#a5b4fc;font-size:14px}
+.urgenti-list .card{background:linear-gradient(135deg,#1f1315,var(--s2));border-color:#ef444433}
+
+/* ── FINANCE SPECIFIC ── */
+.fin-type-E{border-left:3px solid var(--green);background:linear-gradient(135deg,#101f17,var(--s2))}
+.fin-type-U{border-left:3px solid var(--red);background:linear-gradient(135deg,#1f1315,var(--s2))}
+
+/* ── NOTE DETAIL ── */
+.nd-content{white-space:pre-wrap;font-size:15px;line-height:1.7;color:var(--muted2)}
+.nd-meta{font-size:12px;color:var(--muted);margin-top:8px}
+
+/* ── UPLOAD AREA ── */
+.upload-area{border:2px dashed var(--border);border-radius:var(--r);padding:30px;text-align:center;cursor:pointer;transition:border-color .2s;color:var(--muted)}
+.upload-area:hover,.upload-area.drag{border-color:var(--acc);color:var(--acc)}
+.upload-area i{font-size:36px;margin-bottom:10px;display:block}
+
+/* ── SETTINGS LIST ── */
+.set-item{display:flex;align-items:center;padding:16px;cursor:pointer;border-radius:12px;transition:background .2s;gap:14px}
+.set-item:hover{background:var(--s2)}
+.set-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.set-info{flex:1}
+.set-info b{display:block;font-size:15px}
+.set-info small{color:var(--muted);font-size:12px}
+
+/* ── CHARTS ── */
+canvas{max-width:100%;max-height:220px}
+
+/* ── PAGE TRANSITION ── */
+.page{animation:pageIn .2s ease}
+@keyframes pageIn{from{opacity:.6;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>Gestio<span>nale</span></h1>
+  <button class="top-btn" onclick="toggleSearch()"><i class="fa fa-search"></i></button>
+  <button class="top-btn" id="notif-btn" onclick="requestNotifPermission()" title="Attiva notifiche"><i class="fa fa-bell"></i></button>
+  <div id="notif-badge"></div>
+</div>
+<div id="sbar"><input id="sinput" type="search" placeholder="Cerca task, appunti, finanze..." oninput="globalSearch(this.value)" autocomplete="off"></div>
+
+<!-- ══ PAGES ══ -->
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-home">
+  <div class="dash-hero">
+    <h2 id="dash-greeting">Ciao! 👋</h2>
+    <p id="dash-date"></p>
+  </div>
+  <div class="stat-grid" id="dash-stats"></div>
+  <div id="dash-urgenti"></div>
+  <div class="sumbar" id="dash-fin" style="display:none">
+    <div class="si"><div class="si-val" style="color:var(--green)" id="dfe">—</div><div class="si-lbl">Entrate</div></div>
+    <div class="si"><div class="si-val" style="color:var(--red)" id="dfu">—</div><div class="si-lbl">Uscite</div></div>
+    <div class="si"><div class="si-val" id="dfs">—</div><div class="si-lbl">Saldo</div></div>
+  </div>
+</div>
+
+<!-- TASK -->
+<div class="page" id="page-tasks">
+  <div class="stabs">
+    <div class="stab active" onclick="setTTab('attivi',this)">Attivi</div>
+    <div class="stab" onclick="setTTab('completati',this)">✓ Completati</div>
+    <div class="stab" onclick="setTTab('falliti',this)">✗ Falliti</div>
+  </div>
+  <div class="filters" id="fpri">
+    <button class="fb active" onclick="setPF('Tutti',this)">Tutti</button>
+    <button class="fb" onclick="setPF('molto_Alta',this)">🔴 Urgente</button>
+    <button class="fb" onclick="setPF('Alta',this)">🟠 Alta</button>
+    <button class="fb" onclick="setPF('Media',this)">🟡 Media</button>
+    <button class="fb" onclick="setPF('Bassa',this)">🟢 Bassa</button>
+  </div>
+  <div id="tasks-list"></div>
+</div>
+
+<!-- FINANZE -->
+<div class="page" id="page-fin">
+  <div class="sumbar" id="fin-sum" style="display:none">
+    <div class="si"><div class="si-val" style="color:var(--green)" id="fe">—</div><div class="si-lbl">Entrate</div></div>
+    <div class="si"><div class="si-val" style="color:var(--red)" id="fu">—</div><div class="si-lbl">Uscite</div></div>
+    <div class="si"><div class="si-val" id="fs">—</div><div class="si-lbl">Saldo</div></div>
+  </div>
+  <div class="filters" id="ftipo">
+    <button class="fb active" onclick="setTF('Tutti',this)">Tutti</button>
+    <button class="fb" onclick="setTF('Entrata',this)">↑ Entrate</button>
+    <button class="fb" onclick="setTF('Uscita',this)">↓ Uscite</button>
+  </div>
+  <div id="fin-list"></div>
+</div>
+
+<!-- APPUNTI -->
+<div class="page" id="page-note">
+  <div id="note-list"></div>
+  <div id="note-detail" style="display:none">
+    <button onclick="backNotes()" style="background:none;border:none;color:var(--acc);font-size:15px;margin-bottom:14px;cursor:pointer;font-weight:700"><i class="fa fa-arrow-left"></i> Appunti</button>
+    <div class="card">
+      <div id="nd-title" style="font-size:19px;font-weight:800;margin-bottom:6px"></div>
+      <div id="nd-meta" class="nd-meta"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+      <div id="nd-body" class="nd-content"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn bp btn-icon" onclick="editNoteD()"><i class="fa fa-edit"></i> Modifica</button>
+      <button class="btn bd btn-icon" onclick="delNoteD()"><i class="fa fa-trash"></i> Elimina</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOTO -->
+<div class="page" id="page-foto">
+  <div class="filters" id="fgruppo">
+    <button class="fb active" onclick="setGF('Tutti',this)">Tutti</button>
+  </div>
+  <div id="foto-grid" class="foto-grid"></div>
+  <div id="foto-empty" class="empty" style="display:none">
+    <i class="fa fa-images"></i>
+    <p>Nessuna foto</p>
+    <small>Usa + per aggiungere foto</small>
+  </div>
+</div>
+
+<!-- ALTRO (Stats + Export + Backup) -->
+<div class="page" id="page-altro">
+  <!-- Stats -->
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:700;margin-bottom:12px;font-size:15px">📊 Task per Stato</div>
+    <canvas id="chart-stati"></canvas>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:700;margin-bottom:12px;font-size:15px">📈 Priorità Task Attivi</div>
+    <canvas id="chart-prio"></canvas>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div style="font-weight:700;margin-bottom:12px;font-size:15px">💰 Andamento Finanziario (6 mesi)</div>
+    <canvas id="chart-fin"></canvas>
+  </div>
+
+  <!-- Export -->
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:700;margin-bottom:14px;font-size:15px">📤 Esporta Dati</div>
+    <div onclick="window.location='/api/export/tasks/csv'" class="set-item">
+      <div class="set-icon" style="background:#10b98122;color:var(--green)"><i class="fa fa-file-csv"></i></div>
+      <div class="set-info"><b>Task CSV</b><small>Scarica lista task</small></div>
+      <i class="fa fa-download" style="color:var(--muted)"></i>
+    </div>
+    <div onclick="window.location='/api/export/tasks/pdf'" class="set-item">
+      <div class="set-icon" style="background:#ef444422;color:var(--red)"><i class="fa fa-file-pdf"></i></div>
+      <div class="set-info"><b>Task PDF</b><small>Report task stampabile</small></div>
+      <i class="fa fa-download" style="color:var(--muted)"></i>
+    </div>
+    <div onclick="window.location='/api/export/finanze/csv'" class="set-item">
+      <div class="set-icon" style="background:#6366f122;color:var(--acc)"><i class="fa fa-file-csv"></i></div>
+      <div class="set-info"><b>Finanze CSV</b><small>Scarica movimenti</small></div>
+      <i class="fa fa-download" style="color:var(--muted)"></i>
+    </div>
+    <div onclick="window.location='/api/export/finanze/pdf'" class="set-item">
+      <div class="set-icon" style="background:#f59e0b22;color:var(--yellow)"><i class="fa fa-file-pdf"></i></div>
+      <div class="set-info"><b>Finanze PDF</b><small>Report finanziario</small></div>
+      <i class="fa fa-download" style="color:var(--muted)"></i>
+    </div>
+  </div>
+
+  <!-- Import -->
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:700;margin-bottom:14px;font-size:15px">📥 Importa Dati (CSV)</div>
+    <div onclick="openImport('tasks')" class="set-item">
+      <div class="set-icon" style="background:#10b98122;color:var(--green)"><i class="fa fa-upload"></i></div>
+      <div class="set-info"><b>Importa Task</b><small>Da file CSV</small></div>
+      <i class="fa fa-chevron-right" style="color:var(--muted)"></i>
+    </div>
+    <div onclick="openImport('finanze')" class="set-item">
+      <div class="set-icon" style="background:#6366f122;color:var(--acc)"><i class="fa fa-upload"></i></div>
+      <div class="set-info"><b>Importa Finanze</b><small>Da file CSV</small></div>
+      <i class="fa fa-chevron-right" style="color:var(--muted)"></i>
+    </div>
+  </div>
+
+  <!-- Backup -->
+  <div class="card">
+    <div style="font-weight:700;margin-bottom:14px;font-size:15px">💾 Backup & Ripristino</div>
+    <div onclick="window.location='/api/backup'" class="set-item">
+      <div class="set-icon" style="background:#06b6d422;color:var(--cyan)"><i class="fa fa-cloud-arrow-down"></i></div>
+      <div class="set-info"><b>Scarica Backup</b><small>Tutti i dati in JSON</small></div>
+      <i class="fa fa-download" style="color:var(--muted)"></i>
+    </div>
+    <div onclick="openRestore()" class="set-item">
+      <div class="set-icon" style="background:#f59e0b22;color:var(--yellow)"><i class="fa fa-rotate-left"></i></div>
+      <div class="set-info"><b>Ripristina Backup</b><small>Carica un file JSON</small></div>
+      <i class="fa fa-chevron-right" style="color:var(--muted)"></i>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav id="nav">
+  <button class="nb active" onclick="goPage('home',this)"><i class="fa fa-house"></i>Home</button>
+  <button class="nb" onclick="goPage('tasks',this)"><i class="fa fa-list-check"></i>Task<div class="dot" id="dot-tasks"></div></button>
+  <button class="nb" onclick="goPage('fin',this)"><i class="fa fa-euro-sign"></i>Finanze</button>
+  <button class="nb" onclick="goPage('note',this)"><i class="fa fa-sticky-note"></i>Appunti</button>
+  <button class="nb" onclick="goPage('foto',this)"><i class="fa fa-images"></i>Foto</button>
+  <button class="nb" onclick="goPage('altro',this)"><i class="fa fa-ellipsis"></i>Altro</button>
+</nav>
+
+<!-- FAB -->
+<button class="fab" id="fab" onclick="fabAction()"><i class="fa fa-plus"></i></button>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- ══════════ MODALS ══════════ -->
+
+<!-- TASK MODAL -->
+<div class="mbg" id="m-task">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="mt-title">Nuovo Task</div>
+    <input type="hidden" id="t-id">
+    <div class="fg"><label>Nome Task *</label><input class="fi" id="t-nome" type="text" placeholder="Descrivi il task..."></div>
+    <div class="fg"><label>Scadenza</label><input class="fi" id="t-scad" type="date"></div>
+    <div class="fg"><label>Priorità</label>
+      <select class="fi" id="t-prio">
+        <option value="molto_Alta">🔴 Molto Alta</option>
+        <option value="Alta">🟠 Alta</option>
+        <option value="Media" selected>🟡 Media</option>
+        <option value="Bassa">🟢 Bassa</option>
+      </select>
+    </div>
+    <div class="fg"><label>Stato</label>
+      <select class="fi" id="t-stato">
+        <option>Da Iniziare</option><option>In Progresso</option>
+        <option>Completato</option><option>Falliti</option>
+      </select>
+    </div>
+    <div class="fg"><label>Note</label><textarea class="fi" id="t-note" placeholder="Note aggiuntive..." style="min-height:80px"></textarea></div>
+    <div class="ma">
+      <button class="btn bg-" onclick="closeM('m-task')">Annulla</button>
+      <button class="btn bp btn-icon" onclick="saveTask()"><i class="fa fa-save"></i> Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- FINANZA MODAL -->
+<div class="mbg" id="m-fin">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nuova Voce</div>
+    <div class="fg"><label>Descrizione *</label><input class="fi" id="f-desc" type="text" placeholder="Es: Pagamento fattura..."></div>
+    <div class="fg"><label>Importo (€) *</label><input class="fi" id="f-imp" type="number" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="fg"><label>Tipo</label>
+      <select class="fi" id="f-tipo"><option>Entrata</option><option selected>Uscita</option></select>
+    </div>
+    <div class="fg"><label>Categoria</label>
+      <select class="fi" id="f-cat">
+        <option>Altro</option><option>Stipendi</option><option>Materiali</option>
+        <option>Utenze</option><option>Affitto</option><option>Marketing</option>
+        <option>Software</option><option>Attrezzatura</option>
+      </select>
+    </div>
+    <div class="fg"><label>Data</label><input class="fi" id="f-data" type="date"></div>
+    <div class="ma">
+      <button class="btn bg-" onclick="closeM('m-fin')">Annulla</button>
+      <button class="btn bp btn-icon" onclick="saveFin()"><i class="fa fa-save"></i> Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- APPUNTO MODAL -->
+<div class="mbg" id="m-note">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="mn-title">Nuovo Appunto</div>
+    <input type="hidden" id="n-id">
+    <div class="fg"><label>Titolo *</label><input class="fi" id="n-tit" type="text" placeholder="Titolo..."></div>
+    <div class="fg"><label>Contenuto</label><textarea class="fi" id="n-body" placeholder="Scrivi qui..."></textarea></div>
+    <div class="ma">
+      <button class="btn bg-" onclick="closeM('m-note')">Annulla</button>
+      <button class="btn bp btn-icon" onclick="saveNote()"><i class="fa fa-save"></i> Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOTO MODAL -->
+<div class="mbg" id="m-foto">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Aggiungi Foto</div>
+    <div class="fg"><label>Gruppo</label><input class="fi" id="foto-gruppo" type="text" placeholder="Es: Lavori, Prodotti..." value="Senza gruppo"></div>
+    <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+      <i class="fa fa-cloud-arrow-up"></i>
+      <p>Tocca per scegliere foto</p>
+      <small>JPG, PNG, WEBP — max 2MB</small>
+    </div>
+    <input type="file" id="file-input" accept="image/*" style="display:none" multiple onchange="handleFiles(this.files)">
+    <div id="upload-preview" style="margin-top:12px"></div>
+    <div class="ma" style="margin-top:16px">
+      <button class="btn bg-" onclick="closeM('m-foto')">Annulla</button>
+      <button class="btn bp btn-icon" id="btn-upload" onclick="uploadFotos()"><i class="fa fa-upload"></i> Carica</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div class="mbg" id="m-import">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="mi-title">Importa CSV</div>
+    <div class="upload-area" id="csv-area" onclick="document.getElementById('csv-input').click()">
+      <i class="fa fa-file-csv"></i>
+      <p>Seleziona file CSV</p>
+    </div>
+    <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="loadCSV(this)">
+    <div id="csv-preview" style="margin-top:12px;font-size:13px;color:var(--muted)"></div>
+    <div class="ma" style="margin-top:16px">
+      <button class="btn bg-" onclick="closeM('m-import')">Annulla</button>
+      <button class="btn bp btn-icon" onclick="doImport()"><i class="fa fa-upload"></i> Importa</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESTORE MODAL -->
+<div class="mbg" id="m-restore">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Ripristina Backup</div>
+    <div class="upload-area" onclick="document.getElementById('restore-input').click()">
+      <i class="fa fa-cloud-arrow-up"></i>
+      <p>Seleziona file backup JSON</p>
+    </div>
+    <input type="file" id="restore-input" accept=".json" style="display:none" onchange="loadBackup(this)">
+    <div id="restore-preview" style="margin-top:12px;font-size:13px;color:var(--muted)"></div>
+    <div class="ma" style="margin-top:16px">
+      <button class="btn bg-" onclick="closeM('m-restore')">Annulla</button>
+      <button class="btn bd btn-icon" onclick="doRestore()"><i class="fa fa-rotate-left"></i> Ripristina</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="mbg" id="m-confirm">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚠️ Conferma</div>
+    <p style="color:var(--muted2);margin-bottom:20px;line-height:1.6" id="confirm-msg">Sei sicuro?</p>
+    <div class="ma">
+      <button class="btn bg-" onclick="closeM('m-confirm')">Annulla</button>
+      <button class="btn bd" id="confirm-ok">Conferma</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOTO VIEWER -->
+<div class="mbg" id="m-viewer" style="align-items:center;justify-content:center">
+  <div style="max-width:100%;max-height:90dvh;position:relative">
+    <img id="viewer-img" style="max-width:90vw;max-height:85dvh;border-radius:12px;object-fit:contain">
+    <button onclick="closeM('m-viewer')" style="position:absolute;top:-12px;right:-12px;background:var(--s3);border:none;color:var(--text);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px">✕</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// STATE
+// ═══════════════════════════════════
+const S = {
+  page: 'home', taskTab: 'attivi', pf: 'Tutti', tf: 'Tutti',
+  gf: 'Tutti', currentNoteId: null,
+  importType: null, csvContent: null, backupData: null,
+  uploadFiles: [], chartStati: null, chartPrio: null, chartFin: null
+};
+
+// ═══════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════
+function goPage(p, btn) {
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  btn.classList.add('active');
+  S.page = p;
+  closeSearch();
+  if(p==='home')   loadDash();
+  if(p==='tasks')  loadTasks();
+  if(p==='fin')    loadFin();
+  if(p==='note')   { showNoteList(); loadNotes(); }
+  if(p==='foto')   loadFoto();
+  if(p==='altro')  loadStats();
+  const fab = document.getElementById('fab');
+  fab.style.display = ['home','altro'].includes(p) ? 'none' : 'flex';
+}
+
+function fabAction() {
+  if(S.page==='tasks') openTaskM();
+  if(S.page==='fin')   openFinM();
+  if(S.page==='note')  openNoteM();
+  if(S.page==='foto')  openM('m-foto');
+}
+
+// ── SEARCH ──
+let searchOpen = false;
+function toggleSearch() {
+  searchOpen = !searchOpen;
+  document.getElementById('sbar').classList.toggle('open', searchOpen);
+  if(searchOpen) document.getElementById('sinput').focus();
+  else { document.getElementById('sinput').value=''; loadPage(); }
+}
+function closeSearch() { searchOpen=false; document.getElementById('sbar').classList.remove('open'); }
+function globalSearch(q) {
+  if(!q){loadPage();return;}
+  if(S.page==='tasks') searchTasks(q);
+  if(S.page==='fin')   searchFin(q);
+  if(S.page==='note')  loadNotes(q);
+}
+function loadPage() {
+  if(S.page==='tasks') loadTasks();
+  if(S.page==='fin')   loadFin();
+  if(S.page==='note')  loadNotes();
+}
+
+// ── MODAL ──
+function openM(id) { document.getElementById(id).classList.add('open'); }
+function closeM(id) { document.getElementById(id).classList.remove('open'); }
+function confirm(msg, cb) {
+  document.getElementById('confirm-msg').textContent = msg;
+  document.getElementById('confirm-ok').onclick = ()=>{ closeM('m-confirm'); cb(); };
+  openM('m-confirm');
+}
+
+// ── TOAST ──
+let toastTimer;
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show'+(type?' t-'+type:'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.className='', 2800);
+}
+
+// ── LOADER ──
+function loader() { return '<div class="loader"><div class="spin"></div></div>'; }
+
+// ═══════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════
+const VAPID_KEY = "{{ vapid_public }}";
+
+async function requestNotifPermission() {
+  if(!('Notification' in window)) { toast('Browser non supporta notifiche','err'); return; }
+  const perm = await Notification.requestPermission();
+  if(perm === 'granted') {
+    await subscribePush();
+    toast('Notifiche attivate! 🔔','ok');
+    document.getElementById('notif-btn').style.color = 'var(--green)';
+  } else {
+    toast('Permesso negato','err');
+  }
+}
+
+async function subscribePush() {
+  if(!VAPID_KEY || !('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8Array(VAPID_KEY)
+    });
+    await fetch('/api/push/subscribe', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(sub.toJSON())
+    });
+  } catch(e) { console.warn('Push subscribe:', e); }
+}
+
+function urlB64ToUint8Array(b64) {
+  const pad = '='.repeat((4-b64.length%4)%4);
+  const raw = atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return new Uint8Array([...raw].map(c=>c.charCodeAt(0)));
+}
+
+// Controlla notifiche locali all'apertura
+async function checkLocalNotifs() {
+  if(Notification.permission !== 'granted') return;
+  try {
+    const res = await fetch('/api/stats'); const d = await res.json();
+    const u = d.tasks.urgenti;
+    if(u.length > 0) {
+      document.getElementById('dot-tasks').style.display = 'block';
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification('⏰ Task in scadenza', {
+        body: u.slice(0,3).map(t=>`${t.nome} (${t.giorni<0?'scaduto':t.giorni+'g'})`).join('\n'),
+        icon: '/static/icon-192.png', badge: '/static/icon-192.png'
+      });
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════
+async function loadDash() {
+  const sg = document.getElementById('dash-stats');
+  sg.innerHTML = loader();
+  try {
+    const res = await fetch('/api/dashboard'); const d = await res.json();
+    const ora = new Date().getHours();
+    const sal = ora<12?'Buongiorno':'ora<18?'Buon pomeriggio':'Buonasera';
+    const greet = ora<12?'Buongiorno ☀️':ora<18?'Buon pomeriggio 🌤️':'Buonasera 🌙';
+    document.getElementById('dash-greeting').textContent = greet;
+    document.getElementById('dash-date').textContent = new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+
+    sg.innerHTML = `
+      <div class="stat-card sc-blue"><div class="stat-val" style="color:var(--acc)">${d.task_attivi}</div><div class="stat-lbl">Task Attivi</div></div>
+      <div class="stat-card sc-green"><div class="stat-val" style="color:var(--green)">${d.task_completati}</div><div class="stat-lbl">Completati</div></div>
+      <div class="stat-card sc-red"><div class="stat-val" style="color:var(--red)">${d.task_urgenti}</div><div class="stat-lbl">Urgenti</div></div>
+      <div class="stat-card sc-yellow"><div class="stat-val" style="color:var(--yellow)">€${d.finanze_mese.saldo.toFixed(0)}</div><div class="stat-lbl">Saldo Mese</div></div>`;
+
+    const mc = d.finanze_mese;
+    document.getElementById('dfe').textContent = `+€${mc.entrate.toFixed(2)}`;
+    document.getElementById('dfu').textContent = `-€${mc.uscite.toFixed(2)}`;
+    const sEl = document.getElementById('dfs');
+    sEl.textContent = `€${mc.saldo.toFixed(2)}`;
+    sEl.style.color = mc.saldo >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('dash-fin').style.display = 'flex';
+
+    const ul = document.getElementById('dash-urgenti');
+    if(d.urgenti.length > 0) {
+      ul.innerHTML = `<div style="font-weight:700;margin-bottom:10px;font-size:14px;color:var(--muted2)"><i class="fa fa-triangle-exclamation" style="color:var(--red)"></i> Task urgenti</div>` +
+        d.urgenti.map(t => `<div class="card card-sm urgenti-list" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-weight:600;font-size:14px">${t.nome}</div>
+            ${t._giorni<0?'<span class="badge b-red">SCADUTO</span>':t._giorni===0?'<span class="badge b-red">Oggi</span>':`<span class="badge b-cyan">${t._giorni}g</span>`}
+          </div>
+        </div>`).join('');
+    } else {
+      ul.innerHTML = `<div class="card card-sm" style="text-align:center;color:var(--green)"><i class="fa fa-check-circle"></i> Nessun task urgente!</div>`;
+    }
+  } catch(e) { sg.innerHTML = '<div class="empty"><i class="fa fa-wifi"></i><p>Errore connessione</p></div>'; }
+}
+
+// ═══════════════════════════════════
+// TASK
+// ═══════════════════════════════════
+function setTTab(t,el) {
+  S.taskTab=t;
+  document.querySelectorAll('.stab').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('fpri').style.display = t==='attivi'?'flex':'none';
+  loadTasks();
+}
+function setPF(v,el) {
+  S.pf=v;
+  document.querySelectorAll('#fpri .fb').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  loadTasks();
+}
+
+async function loadTasks(q) {
+  const list = document.getElementById('tasks-list');
+  list.innerHTML = loader();
+  try {
+    let url;
+    if(S.taskTab==='attivi') url=`/api/tasks?priorita=${S.pf}`;
+    else url=`/api/tasks/all?stato=${S.taskTab==='completati'?'Completato':'Falliti'}`;
+    const tasks = await fetch(url).then(r=>r.json());
+    let filtered = tasks;
+    if(q) filtered = tasks.filter(t=>t.nome?.toLowerCase().includes(q.toLowerCase()));
+    renderTasks(filtered, list);
+  } catch(e) { list.innerHTML='<div class="empty"><i class="fa fa-wifi"></i><p>Errore</p></div>'; }
+}
+
+async function searchTasks(q) { loadTasks(q); }
+
+function priClass(p) {
+  return {molto_Alta:'p-mA',Alta:'p-A',Media:'p-M',Bassa:'p-B'}[p]||'';
+}
+function priBadge(p) {
+  const m = {molto_Alta:['b-red','🔴 Urgente'],Alta:['b-orange','🟠 Alta'],Media:['b-yellow','🟡 Media'],Bassa:['b-green','🟢 Bassa']};
+  const [cls,lbl] = m[p]||['b-gray',p];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+function statoBadge(s) {
+  const m = {'Da Iniziare':['b-gray','Da Iniziare'],'In Progresso':['b-yellow','In Progresso'],'Completato':['b-green','Completato'],'Falliti':['b-red','Fallito']};
+  const [cls,lbl] = m[s]||['b-gray',s];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+function renderTasks(tasks, cont) {
+  if(!tasks.length) {
+    cont.innerHTML='<div class="empty"><i class="fa fa-clipboard-list"></i><p>Nessun task</p><small>Usa + per aggiungerne uno</small></div>';
+    return;
+  }
+  cont.innerHTML = tasks.map(t=>{
+    const g = t._giorni;
+    let gBadge = '';
+    if(g===-1) gBadge='<span class="badge b-red"><i class="fa fa-clock"></i> SCADUTO</span>';
+    else if(g===0) gBadge='<span class="badge b-red">Oggi</span>';
+    else if(g<=3) gBadge=`<span class="badge b-cyan">${g}g</span>`;
+    else if(g!==9999) gBadge=`<span style="font-size:12px;color:var(--muted)">${g}g</span>`;
+
+    const acts = S.taskTab==='attivi' ? `
+      <div class="ta">
+        <button class="ab a-ok" onclick="setStato(${t._id},'Completato')"><i class="fa fa-check"></i> Fatto</button>
+        <button class="ab a-ko" onclick="setStato(${t._id},'Falliti')"><i class="fa fa-times"></i> Fallito</button>
+        <button class="ab a-ed" onclick="openEditTask(${t._id})"><i class="fa fa-pen"></i> Modifica</button>
+        <button class="ab a-del" onclick="delTask(${t._id})"><i class="fa fa-trash"></i></button>
+      </div>` : `
+      <div class="ta">
+        <button class="ab a-rs" onclick="setStato(${t._id},'Da Iniziare')"><i class="fa fa-rotate-left"></i> Ripristina</button>
+        <button class="ab a-del" onclick="delTask(${t._id})"><i class="fa fa-trash"></i> Elimina</button>
+      </div>`;
+
+    return `<div class="card ${priClass(t.priorita)}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div class="card-title">${t.nome}</div>${gBadge}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        ${priBadge(t.priorita)}${statoBadge(t.stato)}
+        ${t.scadenza&&t.scadenza!=='9999-01-01'?`<span class="badge b-gray"><i class="fa fa-calendar"></i> ${t.scadenza}</span>`:''}
+      </div>
+      ${t.note?`<div style="font-size:13px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${t.note}</div>`:''}
+      ${acts}
+    </div>`;
+  }).join('');
+}
+
+function openTaskM(data, id) {
+  document.getElementById('mt-title').textContent = data?'Modifica Task':'Nuovo Task';
+  document.getElementById('t-id').value   = id??'';
+  document.getElementById('t-nome').value = data?.nome??'';
+  document.getElementById('t-scad').value = data?.scadenza??'';
+  document.getElementById('t-prio').value = data?.priorita??'Media';
+  document.getElementById('t-stato').value= data?.stato??'Da Iniziare';
+  document.getElementById('t-note').value = data?.note??'';
+  openM('m-task');
+  setTimeout(()=>document.getElementById('t-nome').focus(),200);
+}
+
+async function openEditTask(id) {
+  const all = await fetch('/api/tasks/all').then(r=>r.json());
+  const t = all.find(x=>x._id===id);
+  if(t) openTaskM(t,id);
+}
+
+async function saveTask() {
+  const nome = document.getElementById('t-nome').value.trim();
+  if(!nome) { toast('Il nome è obbligatorio','err'); return; }
+  const id = document.getElementById('t-id').value;
+  const payload = {
+    nome, scadenza: document.getElementById('t-scad').value,
+    priorita: document.getElementById('t-prio').value,
+    stato:    document.getElementById('t-stato').value,
+    note:     document.getElementById('t-note').value
+  };
+  const res = await fetch(id!==''?`/api/tasks/${id}`:'/api/tasks',{
+    method:id!==''?'PUT':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+  });
+  const d = await res.json();
+  if(d.ok){ closeM('m-task'); toast(id!==''?'Task modificato ✓':'Task aggiunto ✓','ok'); loadTasks(); }
+  else toast('Errore salvataggio','err');
+}
+
+async function setStato(id, stato) {
+  const res = await fetch(`/api/tasks/${id}/stato`,{
+    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({stato})
+  });
+  toast(stato==='Completato'?'✓ Completato!':stato==='Falliti'?'Task fallito':'Task ripristinato','ok');
+  loadTasks();
+}
+
+function delTask(id) {
+  confirm('Eliminare questo task?', async()=>{
+    await fetch(`/api/tasks/${id}`,{method:'DELETE'});
+    toast('Task eliminato','ok'); loadTasks();
+  });
+}
+
+// ═══════════════════════════════════
+// FINANZE
+// ═══════════════════════════════════
+function setTF(v,el) {
+  S.tf=v;
+  document.querySelectorAll('#ftipo .fb').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active'); loadFin();
+}
+
+async function loadFin(q) {
+  const list = document.getElementById('fin-list');
+  list.innerHTML = loader();
+  try {
+    const [rep, fins] = await Promise.all([
+      fetch('/api/finanze/riepilogo').then(r=>r.json()),
+      fetch(`/api/finanze?tipo=${S.tf}`).then(r=>r.json())
+    ]);
+    const mc = rep.mese_corrente;
+    document.getElementById('fe').textContent=`+€${mc.entrate.toFixed(2)}`;
+    document.getElementById('fu').textContent=`-€${mc.uscite.toFixed(2)}`;
+    const sEl=document.getElementById('fs');
+    sEl.textContent=`€${mc.saldo.toFixed(2)}`;
+    sEl.style.color=mc.saldo>=0?'var(--green)':'var(--red)';
+    document.getElementById('fin-sum').style.display='flex';
+
+    let data = fins;
+    if(q) data = fins.filter(f=>f.descrizione?.toLowerCase().includes(q.toLowerCase()));
+    renderFin(data, list);
+  } catch(e) { list.innerHTML='<div class="empty"><i class="fa fa-wifi"></i><p>Errore</p></div>'; }
+}
+async function searchFin(q) { loadFin(q); }
+
+function renderFin(fins, cont) {
+  if(!fins.length){
+    cont.innerHTML='<div class="empty"><i class="fa fa-euro-sign"></i><p>Nessuna voce</p><small>Usa + per aggiungerne una</small></div>';
+    return;
+  }
+  cont.innerHTML = fins.map(f=>`
+    <div class="card ${f.tipo==='Entrata'?'fin-type-E':'fin-type-U'}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="card-title">${f.descrizione}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px">${f.data}${f.categoria?' · '+f.categoria:''}</div>
+        </div>
+        <div style="font-size:20px;font-weight:800;color:${f.tipo==='Entrata'?'var(--green)':'var(--red)'}">
+          ${f.tipo==='Entrata'?'+':'-'}€${parseFloat(f.importo).toFixed(2)}
+        </div>
+      </div>
+      <div class="ta">
+        <button class="ab a-del" onclick="delFin(${f._id})"><i class="fa fa-trash"></i> Elimina</button>
+      </div>
+    </div>`).join('');
+}
+
+function openFinM() {
+  document.getElementById('f-desc').value='';
+  document.getElementById('f-imp').value='';
+  document.getElementById('f-tipo').value='Uscita';
+  document.getElementById('f-cat').value='Altro';
+  document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+  openM('m-fin');
+  setTimeout(()=>document.getElementById('f-desc').focus(),200);
+}
+
+async function saveFin() {
+  const desc=document.getElementById('f-desc').value.trim();
+  const imp=document.getElementById('f-imp').value;
+  if(!desc||!imp){toast('Compila descrizione e importo','err');return;}
+  const res = await fetch('/api/finanze',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({descrizione:desc,importo:parseFloat(imp),
+      tipo:document.getElementById('f-tipo').value,
+      categoria:document.getElementById('f-cat').value,
+      data:document.getElementById('f-data').value})
+  });
+  const d=await res.json();
+  if(d.ok){closeM('m-fin');toast('Voce aggiunta ✓','ok');loadFin();}
+  else toast('Errore salvataggio','err');
+}
+
+function delFin(id) {
+  confirm('Eliminare questa voce?',async()=>{
+    await fetch(`/api/finanze/${id}`,{method:'DELETE'});
+    toast('Voce eliminata','ok'); loadFin();
+  });
+}
+
+// ═══════════════════════════════════
+// APPUNTI
+// ═══════════════════════════════════
+function showNoteList() {
+  document.getElementById('note-list').style.display='block';
+  document.getElementById('note-detail').style.display='none';
+  document.getElementById('fab').style.display='flex';
+}
+function backNotes() { showNoteList(); loadNotes(); }
+
+async function loadNotes(q) {
+  const list=document.getElementById('note-list');
+  list.innerHTML=loader();
+  try {
+    const notes=await fetch(`/api/appunti${q?'?q='+encodeURIComponent(q):''}`).then(r=>r.json());
+    if(!notes.length){
+      list.innerHTML='<div class="empty"><i class="fa fa-sticky-note"></i><p>Nessun appunto</p><small>Usa + per aggiungerne uno</small></div>';
+      return;
+    }
+    list.innerHTML=notes.map(n=>`
+      <div class="card" onclick="viewNote(${n._id})" style="cursor:pointer">
+        <div class="card-title">${n.titolo}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.contenuto?.substring(0,90)??''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px"><i class="fa fa-clock"></i> ${n.data?.substring(0,16)??''}</div>
+      </div>`).join('');
+  } catch(e){list.innerHTML='<div class="empty"><p>Errore</p></div>';}
+}
+
+async function viewNote(id) {
+  const n=await fetch(`/api/appunti/${id}`).then(r=>r.json());
+  S.currentNoteId=id;
+  document.getElementById('nd-title').textContent=n.titolo;
+  document.getElementById('nd-body').textContent=n.contenuto;
+  document.getElementById('nd-meta').textContent=`Modificato: ${n.data?.substring(0,16)??''}`;
+  document.getElementById('note-list').style.display='none';
+  document.getElementById('note-detail').style.display='block';
+  document.getElementById('fab').style.display='none';
+}
+
+function editNoteD() {
+  openNoteM({titolo:document.getElementById('nd-title').textContent,
+    contenuto:document.getElementById('nd-body').textContent}, S.currentNoteId);
+}
+
+function delNoteD() {
+  confirm('Eliminare questo appunto?',async()=>{
+    await fetch(`/api/appunti/${S.currentNoteId}`,{method:'DELETE'});
+    toast('Appunto eliminato','ok'); backNotes();
+  });
+}
+
+function openNoteM(data,id) {
+  document.getElementById('mn-title').textContent=data?'Modifica Appunto':'Nuovo Appunto';
+  document.getElementById('n-id').value=id??'';
+  document.getElementById('n-tit').value=data?.titolo??'';
+  document.getElementById('n-body').value=data?.contenuto??'';
+  openM('m-note');
+  setTimeout(()=>document.getElementById('n-tit').focus(),200);
+}
+
+async function saveNote() {
+  const titolo=document.getElementById('n-tit').value.trim();
+  if(!titolo){toast('Il titolo è obbligatorio','err');return;}
+  const id=document.getElementById('n-id').value;
+  const res=await fetch(id!==''?`/api/appunti/${id}`:'/api/appunti',{
+    method:id!==''?'PUT':'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({titolo,contenuto:document.getElementById('n-body').value})
+  });
+  const d=await res.json();
+  if(d.ok){closeM('m-note');toast(id!==''?'Appunto modificato ✓':'Appunto salvato ✓','ok');
+    if(id!=='') viewNote(parseInt(id)); else loadNotes();}
+  else toast('Errore salvataggio','err');
+}
+
+// ═══════════════════════════════════
+// FOTO
+// ═══════════════════════════════════
+function setGF(v,el) {
+  S.gf=v;
+  document.querySelectorAll('#fgruppo .fb').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active'); loadFotoFiltered();
+}
+
+async function loadFoto() {
+  try {
+    const gruppi=await fetch('/api/foto/gruppi').then(r=>r.json());
+    const bar=document.getElementById('fgruppo');
+    bar.innerHTML=gruppi.map((g,i)=>`
+      <button class="fb${i===0?' active':''}" onclick="setGF('${g}',this)">${g}</button>`).join('');
+    loadFotoFiltered();
+  } catch(e) {}
+}
+
+async function loadFotoFiltered() {
+  const grid=document.getElementById('foto-grid');
+  const empty=document.getElementById('foto-empty');
+  grid.innerHTML='';
+  try {
+    const url=S.gf==='Tutti'?'/api/foto':`/api/foto?gruppo=${encodeURIComponent(S.gf)}`;
+    const fotos=await fetch(url).then(r=>r.json());
+    if(!fotos.length){grid.style.display='none';empty.style.display='block';return;}
+    grid.style.display='grid'; empty.style.display='none';
+    grid.innerHTML=fotos.map(f=>`
+      <div class="foto-item">
+        <img src="${f.url}" alt="${f.name}" loading="lazy" onclick="viewFoto('${f.url}')">
+        <button class="foto-del" onclick="delFoto(event,'${f.id}')">✕</button>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+function viewFoto(url) {
+  document.getElementById('viewer-img').src=url;
+  openM('m-viewer');
+}
+
+function delFoto(e, id) {
+  e.stopPropagation();
+  confirm('Eliminare questa foto?',async()=>{
+    await fetch(`/api/foto/${id}`,{method:'DELETE'});
+    toast('Foto eliminata','ok'); loadFotoFiltered();
+  });
+}
+
+let filesToUpload=[];
+function handleFiles(files) {
+  filesToUpload=[];
+  document.getElementById('upload-preview').innerHTML='';
+  for(const f of files) {
+    if(f.size>2*1024*1024){toast('File troppo grande (max 2MB)','err');continue;}
+    filesToUpload.push(f);
+    const url=URL.createObjectURL(f);
+    document.getElementById('upload-preview').innerHTML+=`
+      <img src="${url}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin:4px">`;
+  }
+}
+
+async function uploadFotos() {
+  if(!filesToUpload.length){toast('Seleziona almeno una foto','err');return;}
+  const btn=document.getElementById('btn-upload');
+  btn.textContent='Caricamento...'; btn.disabled=true;
+  const gruppo=document.getElementById('foto-gruppo').value||'Senza gruppo';
+  let ok=0;
+  for(const f of filesToUpload) {
+    const b64=await fileToB64(f);
+    const res=await fetch('/api/foto',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:f.name,data:b64.split(',')[1],type:f.type,gruppo})
+    });
+    const d=await res.json();
+    if(d.ok) ok++;
+  }
+  btn.textContent='Carica'; btn.disabled=false;
+  closeM('m-foto'); filesToUpload=[];
+  document.getElementById('upload-preview').innerHTML='';
+  toast(`${ok} foto caricate ✓`,'ok'); loadFoto();
+}
+
+function fileToB64(file) {
+  return new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(file);});
+}
+
+// ═══════════════════════════════════
+// STATISTICHE
+// ═══════════════════════════════════
+async function loadStats() {
+  try {
+    const d=await fetch('/api/stats').then(r=>r.json());
+    const t=d.tasks;
+
+    if(S.chartStati) S.chartStati.destroy();
+    if(S.chartPrio)  S.chartPrio.destroy();
+    if(S.chartFin)   S.chartFin.destroy();
+
+    S.chartStati=new Chart(document.getElementById('chart-stati').getContext('2d'),{
+      type:'doughnut',
+      data:{labels:['Da Iniziare','In Progresso','Completati','Falliti'],
+        datasets:[{data:[t.da_iniziare,t.in_progresso,t.completati,t.falliti],
+          backgroundColor:['#6366f1','#f59e0b','#10b981','#ef4444'],borderWidth:0,borderRadius:4}]},
+      options:{cutout:'70%',plugins:{legend:{labels:{color:'#94a3b8',font:{size:12}}}}}
+    });
+
+    const p=d.priorita;
+    S.chartPrio=new Chart(document.getElementById('chart-prio').getContext('2d'),{
+      type:'bar',
+      data:{labels:['Urgente','Alta','Media','Bassa'],
+        datasets:[{data:[p.molto_Alta,p.Alta,p.Media,p.Bassa],
+          backgroundColor:['#ef4444','#f97316','#f59e0b','#10b981'],borderRadius:8,borderWidth:0}]},
+      options:{plugins:{legend:{display:false}},scales:{
+        x:{ticks:{color:'#64748b'},grid:{display:false}},
+        y:{ticks:{color:'#64748b'},grid:{color:'#2d3f54'}}}}
+    });
+
+    const mesi=d.andamento_finanziario;
+    S.chartFin=new Chart(document.getElementById('chart-fin').getContext('2d'),{
+      type:'bar',
+      data:{labels:mesi.map(m=>m.mese),datasets:[
+        {label:'Entrate',data:mesi.map(m=>m.entrate),backgroundColor:'#10b98180',borderRadius:6,borderWidth:0},
+        {label:'Uscite', data:mesi.map(m=>m.uscite), backgroundColor:'#ef444480',borderRadius:6,borderWidth:0}
+      ]},
+      options:{plugins:{legend:{labels:{color:'#94a3b8'}}},scales:{
+        x:{ticks:{color:'#64748b'},grid:{display:false}},
+        y:{ticks:{color:'#64748b'},grid:{color:'#2d3f54'}}}}
+    });
+  } catch(e){console.error(e);}
+}
+
+// ═══════════════════════════════════
+// IMPORT / EXPORT / BACKUP
+// ═══════════════════════════════════
+function openImport(type) { S.importType=type; S.csvContent=null; document.getElementById('csv-preview').textContent=''; document.getElementById('mi-title').textContent='Importa '+type; openM('m-import'); }
+function openRestore() { S.backupData=null; document.getElementById('restore-preview').textContent=''; openM('m-restore'); }
+
+function loadCSV(input) {
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{ S.csvContent=e.target.result; document.getElementById('csv-preview').textContent=`File: ${file.name} (${Math.round(file.size/1024)}KB)`; };
+  r.readAsText(file,'utf-8');
+}
+
+async function doImport() {
+  if(!S.csvContent){toast('Seleziona un file CSV','err');return;}
+  const res=await fetch(`/api/import/${S.importType}`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({csv:S.csvContent})
+  });
+  const d=await res.json();
+  if(d.ok){closeM('m-import');toast(`${d.importati} righe importate ✓`,'ok');}
+  else toast('Errore importazione','err');
+}
+
+function loadBackup(input) {
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try {
+      S.backupData=JSON.parse(e.target.result);
+      document.getElementById('restore-preview').textContent=
+        `Backup del ${S.backupData.timestamp?.substring(0,10)||'?'} — ${S.backupData.tasks?.length||0} task, ${S.backupData.finanze?.length||0} finanze, ${S.backupData.appunti?.length||0} appunti`;
+    } catch(err){ toast('File JSON non valido','err'); }
+  };
+  r.readAsText(file);
+}
+
+async function doRestore() {
+  if(!S.backupData){toast('Seleziona un file backup','err');return;}
+  confirm('Ripristinare il backup? I dati attuali verranno sovrascritti!',async()=>{
+    const res=await fetch('/api/restore',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(S.backupData)
+    });
+    const d=await res.json();
+    if(d.ok){closeM('m-restore');toast('Backup ripristinato ✓','ok');}
+    else toast('Errore ripristino','err');
+  });
+}
+
+// ═══════════════════════════════════
+// INIT
+// ═══════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  loadDash();
+  document.querySelectorAll('.mbg').forEach(bg=>{
+    bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('open'); });
+  });
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('/static/sw.js').then(()=>{
+      if(Notification.permission==='granted'){
+        document.getElementById('notif-btn').style.color='var(--green)';
+        checkLocalNotifs();
+      }
+    }).catch(()=>{});
+  }
+  // Aggiorna greeting
+  const h=new Date().getHours();
+  document.getElementById('dash-greeting').textContent=h<12?'Buongiorno ☀️':h<18?'Buon pomeriggio 🌤️':'Buonasera 🌙';
+  document.getElementById('dash-date').textContent=new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+});
+</script>
+</body>
+</html>
