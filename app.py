@@ -722,7 +722,17 @@ def restore():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
+        
+@app.route("/api/test-notifica", methods=["GET"])
+def test_notifica():
+    subs, _ = gh_read(FILES["subscriptions"])
+    if not subs:
+        return jsonify({"ok": False, "msg": "Nessun dispositivo registrato"})
+    count = 0
+    for sub in subs:
+        ok = send_push_notification(sub, "🔔 Test notifica!", "Le notifiche funzionano correttamente!")
+        if ok: count += 1
+    return jsonify({"ok": True, "inviati": count, "totale": len(subs)})
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
