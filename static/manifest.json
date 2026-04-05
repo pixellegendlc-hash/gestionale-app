@@ -1,11 +1,11 @@
 {
-  "name": "Gestionale",
-  "short_name": "Gestionale",
-  "description": "Il tuo gestionale personale",
+  "name": "Organizzatore",
+  "short_name": "Organizzatore",
+  "description": "Il tuo organizzatore personale",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0f1a",
-  "theme_color": "#0a0f1a",
+  "background_color": "#080d14",
+  "theme_color": "#080d14",
   "orientation": "portrait",
   "icons": [
     { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

@@ -1,22 +1,15 @@
 """
-Gestionale Mobile v2 - Backend Flask
-Tutte le funzionalità della versione desktop + notifiche push
+Organizzatore - Backend Flask
 """
 from flask import Flask, jsonify, request, render_template, send_file
 from datetime import datetime, date, timedelta
-import json, os, base64, requests, csv, io, time
+import json, os, base64, requests, csv, io
 
 app = Flask(__name__)
 
-# ─────────────────────────────────────────────
-# CONFIGURAZIONE
-# ─────────────────────────────────────────────
-GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "")
-GITHUB_OWNER  = os.environ.get("GITHUB_OWNER", "")
-GITHUB_REPO   = os.environ.get("GITHUB_REPO",  "")
-VAPID_PUBLIC  = os.environ.get("VAPID_PUBLIC_KEY", "")
-VAPID_PRIVATE = os.environ.get("VAPID_PRIVATE_KEY", "")
-VAPID_EMAIL   = os.environ.get("VAPID_EMAIL", "mailto:admin@gestionale.com")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_OWNER = os.environ.get("GITHUB_OWNER", "")
+GITHUB_REPO  = os.environ.get("GITHUB_REPO",  "")
 
 HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}",
@@ -24,20 +17,14 @@ HEADERS = {
 }
 
 FILES = {
-    "tasks":         "tasks.json",
-    "finanze":       "finanze.json",
-    "appunti":       "appunti.json",
-    "foto_meta":     "foto_meta.json",
-    "subscriptions": "push_subscriptions.json",
-    "notif_state":   "notif_state.json",
+    "tasks":     "tasks.json",
+    "finanze":   "finanze.json",
+    "appunti":   "appunti.json",
+    "foto_meta": "foto_meta.json",
 }
 
 _cache = {}
-_last_notif_check = 0
 
-# ─────────────────────────────────────────────
-# GITHUB HELPERS
-# ─────────────────────────────────────────────
 def gh_read(filename, force=False):
     if not force and filename in _cache:
         return _cache[filename]["data"], _cache[filename]["sha"]
@@ -72,8 +59,7 @@ def gh_write(filename, data):
         return True
     return False
 
-def gh_upload_image(path, image_b64, media_type):
-    """Carica un'immagine nel repo GitHub"""
+def gh_upload_image(path, image_b64):
     url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{path}"
     res = requests.get(url, headers=HEADERS)
     sha = res.json().get("sha") if res.status_code == 200 else None
@@ -89,16 +75,12 @@ def gh_delete_file(path):
     if res.status_code != 200:
         return False
     sha = res.json().get("sha")
-    payload = {"message": f"delete {path}", "sha": sha}
-    res = requests.delete(url, headers=HEADERS, json=payload)
+    res = requests.delete(url, headers=HEADERS, json={"message": f"delete {path}", "sha": sha})
     return res.status_code == 200
 
-def inv(filename):
-    _cache.pop(filename, None)
+def inv(f):
+    _cache.pop(f, None)
 
-# ─────────────────────────────────────────────
-# UTILITY
-# ─────────────────────────────────────────────
 def days_until(s):
     if not s or s.strip() in ("", "9999-01-01"):
         return 9999
@@ -114,138 +96,65 @@ def calcola_somme(trans, mese=None):
         mese = datetime.now().strftime("%Y-%m")
     e = u = 0.0
     for t in trans:
-        if t.get("data","").startswith(mese):
+        if t.get("data", "").startswith(mese):
             if t.get("tipo") == "Entrata": e += float(t.get("importo", 0))
             elif t.get("tipo") == "Uscita": u += float(t.get("importo", 0))
     return {"mese": mese, "entrate": e, "uscite": u, "saldo": e - u}
 
-# ─────────────────────────────────────────────
-# NOTIFICHE PUSH
-# ─────────────────────────────────────────────
-def send_push_notification(subscription, title, body, url="/"):
-    if not VAPID_PRIVATE or not VAPID_PUBLIC:
-        return False
-    try:
-        from pywebpush import webpush, WebPushException
-        webpush(
-            subscription_info=subscription,
-            data=json.dumps({"title": title, "body": body, "url": url}),
-            vapid_private_key=VAPID_PRIVATE,
-            vapid_claims={"sub": VAPID_EMAIL}
-        )
-        return True
-    except Exception as e:
-        print(f"Push error: {e}")
-        return False
-
-def check_and_send_notifications():
-    global _last_notif_check
-    now = time.time()
-    if now - _last_notif_check < 3600:  # max ogni ora
-        return
-    _last_notif_check = now
-
-    tasks, _ = gh_read(FILES["tasks"])
-    subs, _  = gh_read(FILES["subscriptions"])
-    if not subs:
-        return
-
-    today = date.today()
-    urgenti = []
-    scaduti = []
-
-    for t in tasks:
-        if t.get("stato") in ("Completato", "Falliti"):
-            continue
-        scad = t.get("scadenza","")
-        if not scad or scad == "9999-01-01":
-            continue
-        try:
-            d = datetime.strptime(scad, "%Y-%m-%d").date()
-            giorni = (d - today).days
-            if giorni < 0:
-                scaduti.append(t.get("nome",""))
-            elif giorni <= 3:
-                urgenti.append((t.get("nome",""), giorni))
-        except:
-            pass
-
-    for sub in subs:
-        if urgenti:
-            nomi = ", ".join(f"{n} ({g}g)" for n,g in urgenti[:3])
-            send_push_notification(sub, "⏰ Task in scadenza!", nomi)
-        if scaduti:
-            nomi = ", ".join(scaduti[:3])
-            send_push_notification(sub, "🚨 Task scaduti!", nomi)
-
-# ─────────────────────────────────────────────
-# MAIN PAGE
-# ─────────────────────────────────────────────
 @app.route("/")
 def index():
-    return render_template("index.html", vapid_public=VAPID_PUBLIC)
+    return render_template("index.html")
 
-# ─────────────────────────────────────────────
-# PUSH SUBSCRIPTION
-# ─────────────────────────────────────────────
-@app.route("/api/push/subscribe", methods=["POST"])
-def push_subscribe():
-    sub = request.json
-    subs, _ = gh_read(FILES["subscriptions"])
-    if not isinstance(subs, list):
-        subs = []
-    # Evita duplicati
-    endpoint = sub.get("endpoint","")
-    subs = [s for s in subs if s.get("endpoint") != endpoint]
-    subs.append(sub)
-    gh_write(FILES["subscriptions"], subs)
-    return jsonify({"ok": True})
-
-@app.route("/api/push/vapid-key", methods=["GET"])
-def get_vapid_key():
-    return jsonify({"publicKey": VAPID_PUBLIC})
-
-# ═══════════════════════════════════════════════
-# DASHBOARD
-# ═══════════════════════════════════════════════
-@app.route("/api/dashboard", methods=["GET"])
+# ── DASHBOARD ──
+@app.route("/api/dashboard")
 def dashboard():
-    check_and_send_notifications()
     inv(FILES["tasks"]); inv(FILES["finanze"])
     tasks, _   = gh_read(FILES["tasks"])
     finanze, _ = gh_read(FILES["finanze"])
-
-    today = date.today()
     attivi     = [t for t in tasks if t.get("stato") not in ("Completato","Falliti")]
     completati = [t for t in tasks if t.get("stato") == "Completato"]
-
     urgenti = []
-    for t in attivi:
+    for i, t in enumerate(attivi):
         g = days_until(t.get("scadenza",""))
         if g <= 3:
-            urgenti.append({**t, "_giorni": g})
-
+            urgenti.append({**t, "_id": tasks.index(t), "_giorni": g})
     urgenti.sort(key=lambda x: x["_giorni"])
     mc = calcola_somme(finanze)
-
     return jsonify({
-        "task_attivi":     len(attivi),
-        "task_completati": len(completati),
-        "task_urgenti":    len(urgenti),
-        "urgenti":         urgenti[:5],
-        "finanze_mese":    mc,
+        "task_attivi": len(attivi), "task_completati": len(completati),
+        "task_urgenti": len(urgenti), "urgenti": urgenti[:5],
+        "finanze_mese": mc
     })
 
-# ═══════════════════════════════════════════════
-# TASK
-# ═══════════════════════════════════════════════
-@app.route("/api/tasks", methods=["GET"])
+# ── SEARCH ──
+@app.route("/api/search")
+def search():
+    q = request.args.get("q","").lower().strip()
+    if not q:
+        return jsonify([])
+    tasks,   _ = gh_read(FILES["tasks"])
+    finanze, _ = gh_read(FILES["finanze"])
+    notes,   _ = gh_read(FILES["appunti"])
+    results = []
+    for i, t in enumerate(tasks):
+        if q in t.get("nome","").lower() or q in t.get("note","").lower() or q in t.get("categoria","").lower():
+            results.append({"tipo":"task","id":i,"titolo":t.get("nome",""),"sub":t.get("stato",""),"priorita":t.get("priorita","")})
+    for i, f in enumerate(finanze):
+        if q in f.get("descrizione","").lower() or q in f.get("categoria","").lower():
+            results.append({"tipo":"finanza","id":i,"titolo":f.get("descrizione",""),"sub":f"{'+' if f.get('tipo')=='Entrata' else '-'}€{float(f.get('importo',0)):.2f}"})
+    for i, n in enumerate(notes):
+        if q in n.get("titolo","").lower() or q in n.get("contenuto","").lower():
+            results.append({"tipo":"appunto","id":i,"titolo":n.get("titolo",""),"sub":n.get("data","")[:10]})
+    return jsonify(results[:20])
+
+# ── TASK ──
+@app.route("/api/tasks")
 def get_tasks():
     inv(FILES["tasks"])
     tasks, _ = gh_read(FILES["tasks"])
     stato_f = request.args.get("stato")
     prio_f  = request.args.get("priorita")
-
+    cat_f   = request.args.get("categoria")
     result = []
     for i, t in enumerate(tasks):
         if stato_f:
@@ -253,9 +162,9 @@ def get_tasks():
         else:
             if t.get("stato") in ("Completato","Falliti"): continue
         if prio_f and prio_f != "Tutti" and t.get("priorita") != prio_f: continue
+        if cat_f and cat_f != "Tutti" and t.get("categoria","") != cat_f: continue
         d = dict(t); d["_id"] = i; d["_giorni"] = days_until(t.get("scadenza",""))
         result.append(d)
-
     def sk(t):
         g = t["_giorni"]
         if g == -1: return (0,0)
@@ -265,7 +174,7 @@ def get_tasks():
     result.sort(key=sk)
     return jsonify(result)
 
-@app.route("/api/tasks/all", methods=["GET"])
+@app.route("/api/tasks/all")
 def get_all_tasks():
     inv(FILES["tasks"])
     tasks, _ = gh_read(FILES["tasks"])
@@ -275,6 +184,25 @@ def get_all_tasks():
         if stato and t.get("stato") != stato: continue
         d = dict(t); d["_id"] = i
         result.append(d)
+    return jsonify(result)
+
+@app.route("/api/tasks/categorie")
+def get_categorie():
+    tasks, _ = gh_read(FILES["tasks"])
+    cats = list(set(t.get("categoria","") for t in tasks if t.get("categoria","")))
+    return jsonify(sorted(cats))
+
+@app.route("/api/tasks/scadenzario")
+def scadenzario():
+    inv(FILES["tasks"])
+    tasks, _ = gh_read(FILES["tasks"])
+    result = {}
+    for i, t in enumerate(tasks):
+        if t.get("stato") in ("Completato","Falliti"): continue
+        scad = t.get("scadenza","")
+        if not scad or scad == "9999-01-01": continue
+        if scad not in result: result[scad] = []
+        result[scad].append({**t, "_id": i, "_giorni": days_until(scad)})
     return jsonify(result)
 
 @app.route("/api/tasks", methods=["POST"])
@@ -287,6 +215,7 @@ def add_task():
         "priorita":           d.get("priorita","Media"),
         "stato":              d.get("stato","Da Iniziare"),
         "note":               d.get("note",""),
+        "categoria":          d.get("categoria",""),
         "data_creazione":     datetime.now().strftime("%Y-%m-%d"),
         "data_completamento": ""
     })
@@ -297,7 +226,7 @@ def update_task(idx):
     tasks, _ = gh_read(FILES["tasks"])
     if idx < 0 or idx >= len(tasks): return jsonify({"ok": False}), 404
     d = request.json
-    for k in ("nome","scadenza","priorita","stato","note"):
+    for k in ("nome","scadenza","priorita","stato","note","categoria"):
         if k in d: tasks[idx][k] = d[k]
     if tasks[idx]["stato"] == "Completato" and not tasks[idx].get("data_completamento"):
         tasks[idx]["data_completamento"] = datetime.now().strftime("%Y-%m-%d")
@@ -319,10 +248,8 @@ def set_stato(idx):
     tasks[idx]["data_completamento"] = datetime.now().strftime("%Y-%m-%d") if s in ("Completato","Falliti") else ""
     return jsonify({"ok": gh_write(FILES["tasks"], tasks)})
 
-# ═══════════════════════════════════════════════
-# FINANZE
-# ═══════════════════════════════════════════════
-@app.route("/api/finanze", methods=["GET"])
+# ── FINANZE ──
+@app.route("/api/finanze")
 def get_finanze():
     inv(FILES["finanze"])
     finanze, _ = gh_read(FILES["finanze"])
@@ -335,7 +262,7 @@ def get_finanze():
     result.sort(key=lambda x: x.get("data",""), reverse=True)
     return jsonify(result)
 
-@app.route("/api/finanze/riepilogo", methods=["GET"])
+@app.route("/api/finanze/riepilogo")
 def riepilogo():
     finanze, _ = gh_read(FILES["finanze"])
     oggi = datetime.now()
@@ -344,7 +271,14 @@ def riepilogo():
         m = oggi.replace(day=1) - timedelta(days=30*i)
         mesi.append(calcola_somme(finanze, m.strftime("%Y-%m")))
     mesi.reverse()
-    return jsonify({"mese_corrente": calcola_somme(finanze), "ultimi_6_mesi": mesi})
+    # Spese per categoria mese corrente
+    cat_spese = {}
+    mese = oggi.strftime("%Y-%m")
+    for f in finanze:
+        if f.get("data","").startswith(mese) and f.get("tipo") == "Uscita":
+            cat = f.get("categoria","Altro")
+            cat_spese[cat] = cat_spese.get(cat, 0) + float(f.get("importo",0))
+    return jsonify({"mese_corrente": calcola_somme(finanze), "ultimi_6_mesi": mesi, "spese_categoria": cat_spese})
 
 @app.route("/api/finanze", methods=["POST"])
 def add_finanza():
@@ -366,10 +300,8 @@ def delete_finanza(idx):
     finanze.pop(idx)
     return jsonify({"ok": gh_write(FILES["finanze"], finanze)})
 
-# ═══════════════════════════════════════════════
-# APPUNTI
-# ═══════════════════════════════════════════════
-@app.route("/api/appunti", methods=["GET"])
+# ── APPUNTI ──
+@app.route("/api/appunti")
 def get_appunti():
     inv(FILES["appunti"])
     notes, _ = gh_read(FILES["appunti"])
@@ -380,9 +312,10 @@ def get_appunti():
         d = {k:v for k,v in n.items() if k != "history"}
         d["_id"] = i
         result.append(d)
+    result.sort(key=lambda x: (not x.get("pinned",False), x.get("data","")), reverse=True)
     return jsonify(result)
 
-@app.route("/api/appunti/<int:idx>", methods=["GET"])
+@app.route("/api/appunti/<int:idx>")
 def get_appunto(idx):
     notes, _ = gh_read(FILES["appunti"])
     if idx < 0 or idx >= len(notes): return jsonify({"ok": False}), 404
@@ -397,6 +330,7 @@ def add_appunto():
         "titolo":    d.get("titolo",""),
         "contenuto": d.get("contenuto",""),
         "data":      datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "pinned":    False,
         "history":   []
     })
     return jsonify({"ok": gh_write(FILES["appunti"], notes), "id": len(notes)-1})
@@ -417,6 +351,13 @@ def update_appunto(idx):
     })
     return jsonify({"ok": gh_write(FILES["appunti"], notes)})
 
+@app.route("/api/appunti/<int:idx>/pin", methods=["PATCH"])
+def pin_appunto(idx):
+    notes, _ = gh_read(FILES["appunti"])
+    if idx < 0 or idx >= len(notes): return jsonify({"ok": False}), 404
+    notes[idx]["pinned"] = not notes[idx].get("pinned", False)
+    return jsonify({"ok": gh_write(FILES["appunti"], notes), "pinned": notes[idx]["pinned"]})
+
 @app.route("/api/appunti/<int:idx>", methods=["DELETE"])
 def delete_appunto(idx):
     notes, _ = gh_read(FILES["appunti"])
@@ -424,10 +365,8 @@ def delete_appunto(idx):
     notes.pop(idx)
     return jsonify({"ok": gh_write(FILES["appunti"], notes)})
 
-# ═══════════════════════════════════════════════
-# FOTO
-# ═══════════════════════════════════════════════
-@app.route("/api/foto", methods=["GET"])
+# ── FOTO ──
+@app.route("/api/foto")
 def get_foto():
     inv(FILES["foto_meta"])
     meta, _ = gh_read(FILES["foto_meta"])
@@ -436,7 +375,7 @@ def get_foto():
         meta = [f for f in meta if f.get("gruppo") == gruppo]
     return jsonify(meta if isinstance(meta, list) else [])
 
-@app.route("/api/foto/gruppi", methods=["GET"])
+@app.route("/api/foto/gruppi")
 def get_gruppi():
     meta, _ = gh_read(FILES["foto_meta"])
     gruppi = list(set(f.get("gruppo","Senza gruppo") for f in (meta if isinstance(meta,list) else [])))
@@ -447,21 +386,20 @@ def upload_foto():
     meta, _ = gh_read(FILES["foto_meta"])
     if not isinstance(meta, list): meta = []
     d = request.json
-    name     = d.get("name","foto.jpg").replace(" ","_")
-    b64data  = d.get("data","")
-    gruppo   = d.get("gruppo","Senza gruppo")
-    ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"foto/{ts}_{name}"
-
-    ok = gh_upload_image(filename, b64data, d.get("type","image/jpeg"))
+    name    = d.get("name","foto.jpg").replace(" ","_")
+    b64data = d.get("data","")
+    gruppo  = d.get("gruppo","Senza gruppo")
+    ts      = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename= f"foto/{ts}_{name}"
+    ok = gh_upload_image(filename, b64data)
     if ok:
         meta.append({
-            "id":      ts,
-            "name":    name,
-            "path":    filename,
-            "gruppo":  gruppo,
-            "data":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "url":     f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/main/{filename}"
+            "id":     ts,
+            "name":   name,
+            "path":   filename,
+            "gruppo": gruppo,
+            "data":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "url":    f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/main/{filename}"
         })
         gh_write(FILES["foto_meta"], meta)
     return jsonify({"ok": ok})
@@ -476,10 +414,8 @@ def delete_foto(foto_id):
     meta = [f for f in meta if f.get("id") != foto_id]
     return jsonify({"ok": gh_write(FILES["foto_meta"], meta)})
 
-# ═══════════════════════════════════════════════
-# STATISTICHE
-# ═══════════════════════════════════════════════
-@app.route("/api/stats", methods=["GET"])
+# ── STATS ──
+@app.route("/api/stats")
 def stats():
     tasks,   _ = gh_read(FILES["tasks"])
     finanze, _ = gh_read(FILES["finanze"])
@@ -488,7 +424,6 @@ def stats():
     falliti     = sum(1 for t in tasks if t.get("stato") == "Falliti")
     in_prog     = sum(1 for t in tasks if t.get("stato") == "In Progresso")
     da_iniziare = sum(1 for t in tasks if t.get("stato") == "Da Iniziare")
-
     today = date.today()
     urgenti = []
     for t in tasks:
@@ -496,172 +431,141 @@ def stats():
             g = days_until(t.get("scadenza",""))
             if g <= 3:
                 urgenti.append({"nome": t.get("nome",""), "scadenza": t.get("scadenza",""), "giorni": g})
-
     oggi = datetime.now()
     mesi = []
     for i in range(6):
         m = oggi.replace(day=1) - timedelta(days=30*i)
         mesi.append(calcola_somme(finanze, m.strftime("%Y-%m")))
     mesi.reverse()
-
-    cpg = {}
-    for t in tasks:
-        if t.get("stato") == "Completato" and t.get("data_completamento"):
-            ds = t["data_completamento"][:10]
-            cpg[ds] = cpg.get(ds,0) + 1
-
-    # Distribuzione priorità
     prio = {"molto_Alta":0,"Alta":0,"Media":0,"Bassa":0}
     for t in tasks:
         if t.get("stato") not in ("Completato","Falliti"):
             p = t.get("priorita","Media")
             if p in prio: prio[p] += 1
-
+    cat_spese = {}
+    mese = oggi.strftime("%Y-%m")
+    for f in finanze:
+        if f.get("data","").startswith(mese) and f.get("tipo") == "Uscita":
+            cat = f.get("categoria","Altro")
+            cat_spese[cat] = cat_spese.get(cat,0) + float(f.get("importo",0))
     return jsonify({
         "tasks": {"totale":totale,"completati":completati,"falliti":falliti,
                   "in_progresso":in_prog,"da_iniziare":da_iniziare,"urgenti":urgenti},
-        "priorita": prio,
-        "completati_per_giorno": cpg,
-        "andamento_finanziario": mesi
+        "priorita": prio, "andamento_finanziario": mesi, "spese_categoria": cat_spese
     })
 
-# ═══════════════════════════════════════════════
-# EXPORT
-# ═══════════════════════════════════════════════
-@app.route("/api/export/tasks/csv", methods=["GET"])
+# ── EXPORT ──
+@app.route("/api/export/tasks/csv")
 def export_tasks_csv():
     tasks, _ = gh_read(FILES["tasks"])
-    output = io.StringIO()
-    w = csv.writer(output)
-    w.writerow(["Nome","Scadenza","Priorità","Stato","Note","Data Completamento"])
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["Nome","Scadenza","Priorità","Stato","Categoria","Note","Data Completamento"])
     for t in tasks:
-        w.writerow([t.get("nome",""), t.get("scadenza",""), t.get("priorita",""),
-                    t.get("stato",""), t.get("note",""), t.get("data_completamento","")])
-    output.seek(0)
-    return send_file(io.BytesIO(output.getvalue().encode("utf-8")),
-                     mimetype="text/csv", as_attachment=True,
-                     download_name=f"tasks_{date.today()}.csv")
+        w.writerow([t.get("nome",""),t.get("scadenza",""),t.get("priorita",""),
+                    t.get("stato",""),t.get("categoria",""),t.get("note",""),t.get("data_completamento","")])
+    out.seek(0)
+    return send_file(io.BytesIO(out.getvalue().encode("utf-8")), mimetype="text/csv",
+                     as_attachment=True, download_name=f"task_{date.today()}.csv")
 
-@app.route("/api/export/finanze/csv", methods=["GET"])
+@app.route("/api/export/finanze/csv")
 def export_finanze_csv():
     finanze, _ = gh_read(FILES["finanze"])
-    output = io.StringIO()
-    w = csv.writer(output)
+    out = io.StringIO()
+    w = csv.writer(out)
     w.writerow(["Descrizione","Data","Tipo","Importo","Categoria"])
     for f in finanze:
-        w.writerow([f.get("descrizione",""), f.get("data",""), f.get("tipo",""),
-                    f.get("importo",""), f.get("categoria","")])
-    output.seek(0)
-    return send_file(io.BytesIO(output.getvalue().encode("utf-8")),
-                     mimetype="text/csv", as_attachment=True,
-                     download_name=f"finanze_{date.today()}.csv")
+        w.writerow([f.get("descrizione",""),f.get("data",""),f.get("tipo",""),
+                    f.get("importo",""),f.get("categoria","")])
+    out.seek(0)
+    return send_file(io.BytesIO(out.getvalue().encode("utf-8")), mimetype="text/csv",
+                     as_attachment=True, download_name=f"finanze_{date.today()}.csv")
 
-@app.route("/api/export/tasks/pdf", methods=["GET"])
+@app.route("/api/export/tasks/pdf")
 def export_tasks_pdf():
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
-
         tasks, _ = gh_read(FILES["tasks"])
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4)
         styles = getSampleStyleSheet()
-        elements = []
-        elements.append(Paragraph(f"Task - {date.today()}", styles["Title"]))
-        elements.append(Spacer(1, 12))
-
-        data = [["Nome","Scadenza","Priorità","Stato"]]
+        els = [Paragraph("Organizzatore — Task", styles["Title"]), Spacer(1,12)]
+        data = [["Nome","Scadenza","Priorità","Stato","Categoria"]]
         for t in tasks:
-            data.append([t.get("nome",""), t.get("scadenza",""),
-                         t.get("priorita",""), t.get("stato","")])
-
-        table = Table(data, colWidths=[200,80,70,80])
-        table.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#1a2332")),
+            data.append([t.get("nome",""),t.get("scadenza",""),t.get("priorita",""),t.get("stato",""),t.get("categoria","")])
+        tbl = Table(data, colWidths=[180,70,70,80,60])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#1e1b4b")),
             ("TEXTCOLOR",(0,0),(-1,0),colors.white),
             ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-            ("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#2d3f54")),
-            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white, colors.HexColor("#f8fafc")]),
-            ("FONTSIZE",(0,0),(-1,-1),9),
-            ("PADDING",(0,0),(-1,-1),6),
+            ("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#e2e8f0")),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#f8fafc")]),
+            ("FONTSIZE",(0,0),(-1,-1),9),("PADDING",(0,0),(-1,-1),6),
         ]))
-        elements.append(table)
-        doc.build(elements)
+        els.append(tbl)
+        doc.build(els)
         buf.seek(0)
-        return send_file(buf, mimetype="application/pdf", as_attachment=True,
-                         download_name=f"tasks_{date.today()}.pdf")
+        return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"task_{date.today()}.pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/export/finanze/pdf", methods=["GET"])
+@app.route("/api/export/finanze/pdf")
 def export_finanze_pdf():
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
-
         finanze, _ = gh_read(FILES["finanze"])
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4)
         styles = getSampleStyleSheet()
-        elements = []
-        elements.append(Paragraph(f"Finanze - {date.today()}", styles["Title"]))
-        elements.append(Spacer(1, 12))
-
         mc = calcola_somme(finanze)
-        elements.append(Paragraph(
-            f"Mese corrente — Entrate: €{mc['entrate']:.2f} | Uscite: €{mc['uscite']:.2f} | Saldo: €{mc['saldo']:.2f}",
-            styles["Normal"]
-        ))
-        elements.append(Spacer(1, 12))
-
+        els = [
+            Paragraph("Organizzatore — Finanze", styles["Title"]), Spacer(1,6),
+            Paragraph(f"Mese corrente: Entrate €{mc['entrate']:.2f} | Uscite €{mc['uscite']:.2f} | Saldo €{mc['saldo']:.2f}", styles["Normal"]),
+            Spacer(1,12)
+        ]
         data = [["Descrizione","Data","Tipo","Importo","Categoria"]]
         for f in finanze:
-            data.append([f.get("descrizione",""), f.get("data",""), f.get("tipo",""),
-                         f"€{float(f.get('importo',0)):.2f}", f.get("categoria","")])
-
-        table = Table(data, colWidths=[160,70,60,70,80])
-        table.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#1a2332")),
+            data.append([f.get("descrizione",""),f.get("data",""),f.get("tipo",""),f"€{float(f.get('importo',0)):.2f}",f.get("categoria","")])
+        tbl = Table(data, colWidths=[160,70,60,70,80])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#1e1b4b")),
             ("TEXTCOLOR",(0,0),(-1,0),colors.white),
             ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-            ("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#2d3f54")),
-            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white, colors.HexColor("#f8fafc")]),
-            ("FONTSIZE",(0,0),(-1,-1),9),
-            ("PADDING",(0,0),(-1,-1),6),
+            ("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#e2e8f0")),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#f8fafc")]),
+            ("FONTSIZE",(0,0),(-1,-1),9),("PADDING",(0,0),(-1,-1),6),
         ]))
-        elements.append(table)
-        doc.build(elements)
+        els.append(tbl)
+        doc.build(els)
         buf.seek(0)
-        return send_file(buf, mimetype="application/pdf", as_attachment=True,
-                         download_name=f"finanze_{date.today()}.pdf")
+        return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"finanze_{date.today()}.pdf")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ═══════════════════════════════════════════════
-# IMPORT CSV
-# ═══════════════════════════════════════════════
+# ── IMPORT ──
 @app.route("/api/import/tasks", methods=["POST"])
 def import_tasks():
     try:
         content = request.json.get("csv","")
-        reader  = csv.DictReader(io.StringIO(content))
+        reader = csv.DictReader(io.StringIO(content))
         tasks, _ = gh_read(FILES["tasks"])
         count = 0
         for row in reader:
-            nome = row.get("Nome","").strip() or row.get("nome","").strip()
+            nome = row.get("Nome", row.get("nome","")).strip()
             if not nome: continue
             tasks.append({
-                "nome":    nome,
-                "scadenza": row.get("Scadenza", row.get("scadenza","")),
+                "nome": nome, "scadenza": row.get("Scadenza", row.get("scadenza","")),
                 "priorita": row.get("Priorità", row.get("priorita","Media")),
-                "stato":    row.get("Stato", row.get("stato","Da Iniziare")),
-                "note":     row.get("Note", row.get("note","")),
-                "data_creazione":     datetime.now().strftime("%Y-%m-%d"),
-                "data_completamento": ""
+                "stato": row.get("Stato", row.get("stato","Da Iniziare")),
+                "note": row.get("Note", row.get("note","")),
+                "categoria": row.get("Categoria", row.get("categoria","")),
+                "data_creazione": datetime.now().strftime("%Y-%m-%d"), "data_completamento": ""
             })
             count += 1
         gh_write(FILES["tasks"], tasks)
@@ -673,7 +577,7 @@ def import_tasks():
 def import_finanze():
     try:
         content = request.json.get("csv","")
-        reader  = csv.DictReader(io.StringIO(content))
+        reader = csv.DictReader(io.StringIO(content))
         finanze, _ = gh_read(FILES["finanze"])
         count = 0
         for row in reader:
@@ -681,10 +585,10 @@ def import_finanze():
             if not desc: continue
             finanze.append({
                 "descrizione": desc,
-                "data":     row.get("Data", row.get("data", datetime.now().strftime("%Y-%m-%d"))),
-                "tipo":     row.get("Tipo", row.get("tipo","Uscita")),
-                "importo":  float(row.get("Importo", row.get("importo",0)) or 0),
-                "categoria":row.get("Categoria", row.get("categoria","Altro"))
+                "data": row.get("Data", row.get("data", datetime.now().strftime("%Y-%m-%d"))),
+                "tipo": row.get("Tipo", row.get("tipo","Uscita")),
+                "importo": float(row.get("Importo", row.get("importo",0)) or 0),
+                "categoria": row.get("Categoria", row.get("categoria","Altro"))
             })
             count += 1
         gh_write(FILES["finanze"], finanze)
@@ -692,25 +596,18 @@ def import_finanze():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# ═══════════════════════════════════════════════
-# BACKUP
-# ═══════════════════════════════════════════════
-@app.route("/api/backup", methods=["GET"])
+# ── BACKUP ──
+@app.route("/api/backup")
 def backup():
     tasks,   _ = gh_read(FILES["tasks"])
     finanze, _ = gh_read(FILES["finanze"])
     notes,   _ = gh_read(FILES["appunti"])
     foto,    _ = gh_read(FILES["foto_meta"])
-    backup_data = {
-        "timestamp": datetime.now().isoformat(),
-        "tasks":     tasks,
-        "finanze":   finanze,
-        "appunti":   notes,
-        "foto_meta": foto if isinstance(foto, list) else []
-    }
-    buf = io.BytesIO(json.dumps(backup_data, indent=2, ensure_ascii=False).encode("utf-8"))
+    data = {"timestamp": datetime.now().isoformat(), "tasks": tasks,
+            "finanze": finanze, "appunti": notes, "foto_meta": foto if isinstance(foto,list) else []}
+    buf = io.BytesIO(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
     return send_file(buf, mimetype="application/json", as_attachment=True,
-                     download_name=f"backup_gestionale_{date.today()}.json")
+                     download_name=f"backup_organizzatore_{date.today()}.json")
 
 @app.route("/api/restore", methods=["POST"])
 def restore():
@@ -722,18 +619,7 @@ def restore():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-        
-@app.route("/api/test-notifica", methods=["GET"])
-def test_notifica():
-    subs, _ = gh_read(FILES["subscriptions"])
-    if not subs:
-        return jsonify({"ok": False, "msg": "Nessun dispositivo registrato"})
-    count = 0
-    for sub in subs:
-        ok = send_push_notification(sub, "🔔 Test notifica!", "Le notifiche funzionano correttamente!")
-        if ok: count += 1
-    return jsonify({"ok": True, "inviati": count, "totale": len(subs)})
-# ─────────────────────────────────────────────
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
