@@ -108,6 +108,32 @@ def raw_url(path):
 def index():
     return render_template("index.html")
 
+# ═══ DASHBOARD ═══
+@app.route("/api/dashboard")
+def dashboard():
+    try:
+        inv(FILES["tasks"]); inv(FILES["finanze"])
+        tasks,   _ = gh_read(FILES["tasks"])
+        finanze, _ = gh_read(FILES["finanze"])
+        attivi     = [t for t in tasks if t.get("stato") not in ("Completato","Falliti")]
+        completati = [t for t in tasks if t.get("stato") == "Completato"]
+        urgenti = []
+        for t in attivi:
+            g = days_until(t.get("scadenza",""))
+            if g <= 3:
+                urgenti.append({**t, "_giorni": g})
+        urgenti.sort(key=lambda x: x["_giorni"])
+        mc = calcola_somme(finanze)
+        return jsonify({
+            "task_attivi":     len(attivi),
+            "task_completati": len(completati),
+            "task_urgenti":    len(urgenti),
+            "urgenti":         urgenti[:5],
+            "finanze_mese":    mc
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ═══ TASK ═══
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
@@ -283,60 +309,79 @@ def delete_appunto(idx):
     return jsonify({"ok": gh_write(FILES["appunti"], notes)})
 
 # ═══ FOTO ═══
-def _foto_meta():
+@app.route("/api/foto")
+def get_foto():
     inv(FILES["foto"])
     meta, _ = gh_read(FILES["foto"])
-    return meta if isinstance(meta, list) else []
-
-@app.route("/api/photos", methods=["GET"])
-def get_photos():
-    meta  = _foto_meta()
-    group = request.args.get("group")
-    if group and group != "Tutte":
-        meta = [f for f in meta if f.get("group") == group]
+    if not isinstance(meta, list): meta = []
+    gruppo = request.args.get("gruppo")
+    if gruppo and gruppo != "Tutti":
+        meta = [f for f in meta if f.get("gruppo") == gruppo]
+    # Sostituisce url con url proxy interno (funziona anche con repo privato)
+    for f in meta:
+        if f.get("path"):
+            f["url"] = "/api/foto/img/" + f["path"]
     return jsonify(meta)
 
-@app.route("/api/photos/groups", methods=["GET"])
-def get_photo_groups():
-    meta   = _foto_meta()
-    groups = sorted(set(f.get("group","") for f in meta if f.get("group")))
-    return jsonify(["Tutte"] + groups)
+@app.route("/api/foto/gruppi")
+def get_gruppi_foto():
+    inv(FILES["foto"])
+    meta, _ = gh_read(FILES["foto"])
+    if not isinstance(meta, list): meta = []
+    gruppi = sorted(set(f.get("gruppo", "Senza gruppo") for f in meta))
+    return jsonify(["Tutti"] + gruppi)
 
-@app.route("/api/photos/groups", methods=["POST"])
-def create_photo_group():
-    return jsonify({"ok": True})
+@app.route("/api/foto/img/<path:filepath>")
+def serve_foto(filepath):
+    """Proxy autenticato per servire immagini dal repo privato GitHub"""
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{filepath}"
+    res = requests.get(url, headers=HEADERS)
+    if res.status_code != 200:
+        return "Not found", 404
+    body = res.json()
+    img_data = base64.b64decode(body["content"].replace("\n", ""))
+    # Determina il content-type dall'estensione
+    ext = filepath.rsplit(".", 1)[-1].lower()
+    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+            "gif": "image/gif", "webp": "image/webp"}.get(ext, "image/jpeg")
+    from flask import Response
+    return Response(img_data, mimetype=mime,
+                    headers={"Cache-Control": "public, max-age=3600"})
 
-@app.route("/api/photos/upload", methods=["POST"])
-def upload_photo():
-    meta     = _foto_meta()
-    d        = request.json
-    filename = d.get("filename","foto.jpg").replace(" ","_")
-    content  = d.get("content","")
-    group    = d.get("group") or "Senza gruppo"
+@app.route("/api/foto", methods=["POST"])
+def upload_foto():
+    inv(FILES["foto"])
+    meta, _ = gh_read(FILES["foto"])
+    if not isinstance(meta, list): meta = []
+    d = request.json
+    name     = d.get("name", "foto.jpg").replace(" ", "_")
+    b64data  = d.get("data", "")
+    gruppo   = d.get("gruppo", "Senza gruppo")
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path     = f"foto/{ts}_{filename}"
-    sha      = gh_upload_file(path, content)
-    if not sha:
-        return jsonify({"ok": False, "error": "Upload fallito"}), 500
-    meta.append({
-        "id": ts, "name": filename, "path": path, "sha": sha,
-        "group": group, "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "download_url": raw_url(path)
-    })
-    gh_write(FILES["foto"], meta)
-    return jsonify({"ok": True})
+    filename = f"foto/{ts}_{name}"
+    ok = gh_upload_image(filename, b64data)
+    if ok:
+        meta.append({
+            "id":     ts,
+            "name":   name,
+            "path":   filename,
+            "gruppo": gruppo,
+            "data":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "url":    "/api/foto/img/" + filename
+        })
+        gh_write(FILES["foto"], meta)
+    return jsonify({"ok": ok})
 
-@app.route("/api/photos/delete", methods=["POST"])
-def delete_photo():
-    meta = _foto_meta()
-    d    = request.json
-    path = d.get("path"); sha = d.get("sha")
-    if not path or not sha:
-        return jsonify({"ok": False}), 400
-    gh_delete_file(path, sha)
-    meta = [f for f in meta if f.get("path") != path]
-    gh_write(FILES["foto"], meta)
-    return jsonify({"ok": True})
+@app.route("/api/foto/<foto_id>", methods=["DELETE"])
+def delete_foto(foto_id):
+    inv(FILES["foto"])
+    meta, _ = gh_read(FILES["foto"])
+    if not isinstance(meta, list): return jsonify({"ok": False})
+    foto = next((f for f in meta if f.get("id") == foto_id), None)
+    if not foto: return jsonify({"ok": False}), 404
+    gh_delete_file(foto["path"])
+    meta = [f for f in meta if f.get("id") != foto_id]
+    return jsonify({"ok": gh_write(FILES["foto"], meta)})
 
 # ═══ STATISTICHE ═══
 @app.route("/api/stats", methods=["GET"])
