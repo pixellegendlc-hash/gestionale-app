@@ -925,11 +925,12 @@ function delFoto(e, id) {
 }
 
 let filesToUpload = [];
+
 function handleFiles(files) {
   filesToUpload = [];
   document.getElementById('upload-preview').innerHTML = '';
   for (const f of files) {
-    if (f.size > 2 * 1024 * 1024) { toast('File troppo grande (max 2MB)', 'err'); continue; }
+    if (!f.type.startsWith('image/')) { toast('Solo immagini supportate', 'err'); continue; }
     filesToUpload.push(f);
     const url = URL.createObjectURL(f);
     const img = document.createElement('img');
@@ -937,40 +938,72 @@ function handleFiles(files) {
     img.style.cssText = 'width:70px;height:70px;object-fit:cover;border-radius:8px';
     document.getElementById('upload-preview').appendChild(img);
   }
+  if (filesToUpload.length)
+    toast(filesToUpload.length + ' foto selezionate', 'ok');
+}
+
+// Comprime l'immagine a max 800px e qualità 75% prima di inviarla
+function compressImage(file, maxW = 800, quality = 0.75) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        // Risultato come base64 senza prefisso
+        const b64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+        resolve(b64);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function uploadFotos() {
   if (!filesToUpload.length) { toast('Seleziona almeno una foto', 'err'); return; }
   const btn = document.getElementById('btn-upload');
-  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Caricamento...';
-  btn.disabled = true;
   const gruppo = document.getElementById('foto-gruppo').value || 'Senza gruppo';
-  let ok = 0;
-  for (const f of filesToUpload) {
-    const b64 = await fileToB64(f);
-    const res = await fetch('/api/foto', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name: f.name, data: b64.split(',')[1], type: f.type, gruppo})
-    });
-    const d = await res.json();
-    if (d.ok) ok++;
+  let ok = 0, fail = 0;
+
+  for (let i = 0; i < filesToUpload.length; i++) {
+    const f = filesToUpload[i];
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> ' + (i + 1) + '/' + filesToUpload.length + '...';
+    btn.disabled = true;
+    try {
+      const b64 = await compressImage(f);
+      // Timeout di 25 secondi per evitare attesa infinita
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 25000);
+      const res = await fetch('/api/foto', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: f.name, data: b64, type: 'image/jpeg', gruppo}),
+        signal: controller.signal
+      });
+      clearTimeout(tid);
+      const d = await res.json();
+      if (d.ok) ok++; else fail++;
+    } catch(e) {
+      fail++;
+      console.error('Upload error:', e);
+    }
   }
+
   btn.innerHTML = '<i class="fa fa-upload"></i> Carica';
   btn.disabled = false;
   closeM('m-foto');
   filesToUpload = [];
   document.getElementById('upload-preview').innerHTML = '';
   document.getElementById('file-input').value = '';
-  toast(ok + ' foto caricate ✓', 'ok');
-  loadFoto();
-}
 
-function fileToB64(file) {
-  return new Promise(res => {
-    const r = new FileReader();
-    r.onload = e => res(e.target.result);
-    r.readAsDataURL(file);
-  });
+  if (ok > 0) toast(ok + ' foto caricate ✓', 'ok');
+  if (fail > 0) toast(fail + ' foto fallite ✗', 'err');
+  loadFoto();
 }
 
 // ── STATS ──
