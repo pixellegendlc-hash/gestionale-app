@@ -335,15 +335,14 @@ def get_gruppi_foto():
 def serve_foto(filepath):
     """Proxy autenticato per servire immagini dal repo privato GitHub"""
     url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{filepath}"
-    res = requests.get(url, headers=HEADERS)
+    res = requests.get(url, headers=GH_HEADERS)
     if res.status_code != 200:
         return "Not found", 404
     body = res.json()
     img_data = base64.b64decode(body["content"].replace("\n", ""))
-    # Determina il content-type dall'estensione
     ext = filepath.rsplit(".", 1)[-1].lower()
-    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-            "gif": "image/gif", "webp": "image/webp"}.get(ext, "image/jpeg")
+    mime = {"jpg":"image/jpeg","jpeg":"image/jpeg","png":"image/png",
+            "gif":"image/gif","webp":"image/webp"}.get(ext, "image/jpeg")
     from flask import Response
     return Response(img_data, mimetype=mime,
                     headers={"Cache-Control": "public, max-age=3600"})
@@ -353,24 +352,29 @@ def upload_foto():
     inv(FILES["foto"])
     meta, _ = gh_read(FILES["foto"])
     if not isinstance(meta, list): meta = []
-    d = request.json
-    name     = d.get("name", "foto.jpg").replace(" ", "_")
-    b64data  = d.get("data", "")
-    gruppo   = d.get("gruppo", "Senza gruppo")
-    ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
+    d       = request.json
+    name    = d.get("name", "foto.jpg").replace(" ", "_")
+    b64data = d.get("data", "")
+    gruppo  = d.get("gruppo", "Senza gruppo")
+    ts      = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Assicura estensione .jpg perché comprimiamo in JPEG dal frontend
+    if not name.lower().endswith(('.jpg','.jpeg','.png','.webp')):
+        name += ".jpg"
     filename = f"foto/{ts}_{name}"
-    ok = gh_upload_image(filename, b64data)
-    if ok:
+    sha = gh_upload_file(filename, b64data)
+    if sha:
         meta.append({
             "id":     ts,
             "name":   name,
             "path":   filename,
+            "sha":    sha,
             "gruppo": gruppo,
             "data":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "url":    "/api/foto/img/" + filename
         })
         gh_write(FILES["foto"], meta)
-    return jsonify({"ok": ok})
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "Upload su GitHub fallito"})
 
 @app.route("/api/foto/<foto_id>", methods=["DELETE"])
 def delete_foto(foto_id):
@@ -379,7 +383,8 @@ def delete_foto(foto_id):
     if not isinstance(meta, list): return jsonify({"ok": False})
     foto = next((f for f in meta if f.get("id") == foto_id), None)
     if not foto: return jsonify({"ok": False}), 404
-    gh_delete_file(foto["path"])
+    # Usa sha salvato per eliminare il file
+    gh_delete_file(foto["path"], foto.get("sha",""))
     meta = [f for f in meta if f.get("id") != foto_id]
     return jsonify({"ok": gh_write(FILES["foto"], meta)})
 
